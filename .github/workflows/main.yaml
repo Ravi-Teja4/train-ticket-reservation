@@ -62,3 +62,4 @@ jobs:
           --namespace default \
           --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }} \
           --set image.tag=$IMAGE_TAG
+          
