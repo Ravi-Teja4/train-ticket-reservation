@@ -3,7 +3,7 @@ name: Build & Deploy to EKS with Helm
 on:
   push:
     branches:
-      - main          # deploy only on main
+      - master         # deploy only on main
 
 jobs:
   build_and_deploy:
