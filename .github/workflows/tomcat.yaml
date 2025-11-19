@@ -1,111 +1,54 @@
-name: Build and Deploy train-ticket-reservation
+name: Build & Deploy to EKS with Helm
 
 on:
   push:
-    branches: [ master ]
-  workflow_dispatch:
+    branches:
+      - main          # deploy only on main
 
 jobs:
-  build:
+  build_and_deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: ☕ Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: 🔨 Build with Maven
-        run: mvn clean package -DskipTests
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 🗂 Find WAR file
-        run: echo "WAR_FILE=$(ls target/*.war | head -n 1)" >> $GITHUB_ENV
+    - name: Build Docker image
+      run: |
+        IMAGE_TAG=${GITHUB_SHA::7}
+        docker build -t ${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG .
 
-      - name: ⬆️ Upload WAR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: war-file
-          path: ${{ env.WAR_FILE }}
+    - name: Tag image
+      run: |
+        IMAGE_TAG=${GITHUB_SHA::7}
+        docker tag ${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG \
+          ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG
 
-  deploy-dev:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: war-file
+    - name: Push image to ECR
+      run: |
+        IMAGE_TAG=${GITHUB_SHA::7}
+        docker push ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG
 
-      - name: 🚀 Deploy to DEV
-        env:
-          URL: ${{ secrets.TOMCAT_URL_DEV }}
-          USER: ${{ secrets.TOMCAT_USER_DEV }}
-          PASS: ${{ secrets.TOMCAT_PASS_DEV }}
-        run: |
-          WAR_FILE=$(ls *.war | head -n 1)
-          echo "Deploying $WAR_FILE to DEV ($URL)"
-          curl -v -u "$USER:$PASS" "$URL/list"
-          curl -v -u "$USER:$PASS" --fail --show-error -T "$WAR_FILE" \
-            "$URL/deploy?path=/train-ticket-reservation&update=true"
+    - name: Update kubeconfig for EKS
+      run: |
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} \
+        --name ${{ secrets.EKS_CLUSTER_NAME }}
 
-  deploy-test:
-    needs: deploy-dev
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: war-file
-
-      - name: 🚀 Deploy to TEST
-        env:
-          URL: ${{ secrets.TOMCAT_URL_TEST }}
-          USER: ${{ secrets.TOMCAT_USER_TEST }}
-          PASS: ${{ secrets.TOMCAT_PASS_TEST }}
-        run: |
-          WAR_FILE=$(ls *.war | head -n 1)
-          echo "Deploying $WAR_FILE to TEST ($URL)"
-          curl -v -u "$USER:$PASS" "$URL/list"
-          curl -v -u "$USER:$PASS" --fail --show-error -T "$WAR_FILE" \
-            "$URL/deploy?path=/train-ticket-reservation&update=true"
-
-  deploy-prepod:
-    needs: deploy-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: war-file
-
-      - name: 🚀 Deploy to PRE-POD
-        env:
-          URL: ${{ secrets.TOMCAT_URL_PRE_POD }}
-          USER: ${{ secrets.TOMCAT_USER_PRE_POD }}
-          PASS: ${{ secrets.TOMCAT_PASS_PRE_POD }}
-        run: |
-          WAR_FILE=$(ls *.war | head -n 1)
-          echo "Deploying $WAR_FILE to PRE-POD ($URL)"
-          curl -v -u "$USER:$PASS" "$URL/list"
-          curl -v -u "$USER:$PASS" --fail --show-error -T "$WAR_FILE" \
-            "$URL/deploy?path=/train-ticket-reservation&update=true"
-
-  deploy-prod:
-    needs: deploy-prepod
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: war-file
-
-      - name: 🚀 Deploy to PROD
-        env:
-          URL: ${{ secrets.TOMCAT_URL_POD }}
-          USER: ${{ secrets.TOMCAT_USER_POD }}
-          PASS: ${{ secrets.TOMCAT_PASS_POD }}
-        run: |
-          WAR_FILE=$(ls *.war | head -n 1)
-          echo "Deploying $WAR_FILE to PROD ($URL)"
-          curl -v -u "$USER:$PASS" "$URL/list"
-          curl -v -u "$USER:$PASS" --fail --show-error -T "$WAR_FILE" \
-            "$URL/deploy?path=/train-ticket-reservation&update=true"
+    - name: Deploy with Helm
+      run: |
+        IMAGE_TAG=${GITHUB_SHA::7}
+        helm upgrade --install myapp ./helm/myapp \
+          --namespace default \
+          --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }} \
+          --set image.tag=$IMAGE_TAG
