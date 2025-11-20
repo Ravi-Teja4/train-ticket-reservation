@@ -21,7 +21,6 @@ jobs:
         distribution: 'temurin'
 
     - name: Build WAR with Maven
-      working-directory: ./train-ticket-reservation
       run: mvn clean package -DskipTests
 
     - name: Configure AWS credentials
@@ -36,7 +35,6 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Build Docker image
-      working-directory: ./train-ticket-reservation
       run: |
         IMAGE_TAG=${GITHUB_SHA::7}
         docker build -t ${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG .
@@ -58,7 +56,6 @@ jobs:
         --name ${{ secrets.EKS_CLUSTER_NAME }}
 
     - name: Deploy with Helm
-      working-directory: ./train-ticket-reservation
       run: |
         IMAGE_TAG=${GITHUB_SHA::7}
         helm upgrade --install myapp ./helm \
