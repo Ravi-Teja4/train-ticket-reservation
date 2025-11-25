@@ -1,4 +1,4 @@
-name: CI-CD Java App with SonarQube, Nexus, Tomcat
+name: CI-CD Java App with Nexus and Tomcat
 
 on:
   push:
@@ -27,20 +27,10 @@ jobs:
             ${{ runner.os }}-m2
 
       # ------------------------------------------------------
-      #           FIXED SONARQUBE STEP WITH TOKEN  
-      # ------------------------------------------------------
-      - name: SonarQube Scan
-        run: |
-          mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-            -Dsonar.projectKey=TrainBook \
-            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
-
-      # ------------------------------------------------------
       #           BUILD JAVA WAR FILE
       # ------------------------------------------------------
       - name: Build WAR File
-        run: mvn package -DskipTests
+        run: mvn clean package -DskipTests
 
       # ------------------------------------------------------
       #           UPLOAD ARTIFACT TO NEXUS
