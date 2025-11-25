@@ -2,8 +2,7 @@ name: CI-CD Java App with SonarQube, Nexus, Tomcat
 
 on:
   push:
-    branches: ["master"]
-  pull_request:
+    branches: ["main"]
 
 jobs:
   build:
@@ -19,7 +18,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Cache Maven Packages
+      - name: Cache Maven Repo
         uses: actions/cache@v3
         with:
           path: ~/.m2
@@ -27,27 +26,42 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2
 
-      # ✅ FIXED SONARQUBE COMMAND
+      # ------------------------------------------------------
+      #           FIXED SONARQUBE STEP WITH TOKEN  
+      # ------------------------------------------------------
       - name: SonarQube Scan
         run: |
-          mvn clean verify sonar:sonar \
-            -Dsonar.projectKey=java-app \
+          mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+            -Dsonar.projectKey=TrainBook \
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
 
-      - name: Build Application
+      # ------------------------------------------------------
+      #           BUILD JAVA WAR FILE
+      # ------------------------------------------------------
+      - name: Build WAR File
         run: mvn package -DskipTests
 
+      # ------------------------------------------------------
+      #           UPLOAD ARTIFACT TO NEXUS
+      # ------------------------------------------------------
       - name: Upload Artifact to Nexus
         run: |
           ARTIFACT=$(find target -name "*.war")
+          echo "Uploading $ARTIFACT to Nexus..."
+
           curl -v -u "${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }}" \
             --upload-file "$ARTIFACT" \
             "${{ secrets.NEXUS_REPO_URL }}/$(basename $ARTIFACT)"
 
-      - name: Deploy WAR to Tomcat
+      # ------------------------------------------------------
+      #           DEPLOY WAR TO TOMCAT SERVER
+      # ------------------------------------------------------
+      - name: Deploy to Tomcat
         run: |
           WAR_FILE=$(find target -name "*.war")
+          echo "Deploying $WAR_FILE to Tomcat..."
+
           curl -T "$WAR_FILE" \
-            "${{ secrets.TOMCAT_URL_DEV }}/manager/text/deploy?path=/myapp&update=true" \
+            "${{ secrets.TOMCAT_URL_DEV }}/manager/text/deploy?path=/trainbook&update=true" \
             --user "${{ secrets.TOMCAT_USER_DEV }}:${{ secrets.TOMCAT_PASS_DEV }}"
