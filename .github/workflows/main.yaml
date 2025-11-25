@@ -3,7 +3,7 @@ name: Build and Upload Artifact to Nexus (No pom.xml changes)
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   build:
@@ -27,12 +27,12 @@ jobs:
         run: mvn clean package -DskipTests
 
       # -------------------------------
-      # UPLOAD ARTIFACT TO NEXUS
+      # UPLOAD WAR TO NEXUS
       # -------------------------------
       - name: Upload Artifact to Nexus
         run: |
-          ARTIFACT=$(find target -name "*.war" -or -name "*.jar")
-          FILENAME=$(basename $ARTIFACT)
+          ARTIFACT=$(find target -maxdepth 1 -name "*.war")
+          FILENAME=$(basename "$ARTIFACT")
 
           echo "Uploading $FILENAME to Nexus..."
 
