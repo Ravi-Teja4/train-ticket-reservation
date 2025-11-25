@@ -1,4 +1,4 @@
-name: Build and Upload Artifact to Nexus
+name: Build and Upload Artifact to Nexus (No pom.xml changes)
 
 on:
   push:
@@ -11,34 +11,31 @@ jobs:
 
     steps:
 
-      # -----------------------------
-      # CHECKOUT CODE
-      # -----------------------------
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # -----------------------------
-      # SETUP JAVA 17
-      # -----------------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
-          distribution: "temurin"
-          java-version: "17"
+          distribution: temurin
+          java-version: 17
 
-      # -----------------------------
-      # BUILD PROJECT (WAR/JAR)
-      # -----------------------------
+      # -------------------------------
+      # BUILD PROJECT
+      # -------------------------------
       - name: Build Maven Project
         run: mvn clean package -DskipTests
 
-      # -----------------------------
-      # DEPLOY ARTIFACT TO NEXUS
-      # -----------------------------
+      # -------------------------------
+      # UPLOAD ARTIFACT TO NEXUS
+      # -------------------------------
       - name: Upload Artifact to Nexus
         run: |
-          mvn deploy \
-            -DskipTests \
-            -DaltDeploymentRepository=nexus::default::http://63.35.222.243:8081/repository/maven-releases/ \
-            -Dnexus.username=${{ secrets.NEXUS_USERNAME }} \
-            -Dnexus.password=${{ secrets.NEXUS_PASSWORD }}
+          ARTIFACT=$(find target -name "*.war" -or -name "*.jar")
+          FILENAME=$(basename $ARTIFACT)
+
+          echo "Uploading $FILENAME to Nexus..."
+
+          curl -v -u "${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }}" \
+            --upload-file "$ARTIFACT" \
+            "http://63.35.222.243:8081/repository/maven-releases/$FILENAME"
