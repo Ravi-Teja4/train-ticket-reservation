@@ -2,7 +2,7 @@ name: CI-CD Java App with SonarQube, Nexus, Tomcat
 
 on:
   push:
-    branches: ["main"]
+    branches: ["master"]
 
 jobs:
   build:
