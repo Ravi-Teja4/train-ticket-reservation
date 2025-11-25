@@ -2,7 +2,7 @@ name: CI-CD Java App with SonarQube, Nexus, Tomcat
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
   pull_request:
 
 jobs:
@@ -10,18 +10,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout Code
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Setup JDK
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 17
 
-      # Cache Maven packages
       - name: Cache Maven Packages
         uses: actions/cache@v3
         with:
@@ -30,33 +27,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2
 
-      # Run SonarQube Scan
+      # ✅ FIXED SONARQUBE COMMAND
       - name: SonarQube Scan
-        run: mvn clean verify sonar:sonar \
+        run: |
+          mvn clean verify sonar:sonar \
             -Dsonar.projectKey=java-app \
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-      # Build with Maven
-      - name: Build Maven Project
-        run: mvn clean package -DskipTests
+      - name: Build Application
+        run: mvn package -DskipTests
 
-      # Upload artifact to Nexus
       - name: Upload Artifact to Nexus
         run: |
-          ARTIFACT_PATH=$(find target -name "*.war")
-          echo "Uploading $ARTIFACT_PATH to Nexus..."
-
+          ARTIFACT=$(find target -name "*.war")
           curl -v -u "${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }}" \
-            --upload-file "$ARTIFACT_PATH" \
-            "${{ secrets.NEXUS_REPO_URL }}/$(basename $ARTIFACT_PATH)"
+            --upload-file "$ARTIFACT" \
+            "${{ secrets.NEXUS_REPO_URL }}/$(basename $ARTIFACT)"
 
-      # Deploy to Tomcat Server
       - name: Deploy WAR to Tomcat
         run: |
           WAR_FILE=$(find target -name "*.war")
-          echo "Deploying $WAR_FILE to Tomcat..."
-
           curl -T "$WAR_FILE" \
             "${{ secrets.TOMCAT_URL_DEV }}/manager/text/deploy?path=/myapp&update=true" \
             --user "${{ secrets.TOMCAT_USER_DEV }}:${{ secrets.TOMCAT_PASS_DEV }}"
